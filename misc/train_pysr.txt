@@ -1,0 +1,115 @@
+# train_pysr.py
+import numpy as np
+from data_qm9 import get_splits
+from models_pysr import build_pysr_baseline
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.pipeline import Pipeline
+from train_rf import train_simple_rf
+from plots import plot_top_features
+import matplotlib.pyplot as plt
+import pandas as pd
+import sympy as sp
+from warnings import filterwarnings
+filterwarnings('ignore')
+
+RANDOM_SEED = 42
+GET_IMPORTANCES = False
+
+def evaluate(model, X, y, name = ""):
+    y_pred = model.predict(X)
+    mse = mean_squared_error(y, y_pred)  # no 'squared' kwarg
+    rmse = np.sqrt(mse)
+    mae = mean_absolute_error(y, y_pred)
+    print(f"{name} RMSE: {rmse:.3f}, MAE: {mae:.3f}")
+    return rmse, mae, y_pred
+
+def main():
+    seed = RANDOM_SEED
+    rng = np.random.RandomState(seed)
+
+    print("Loading data...")
+    X_train, X_val, X_test, y_train, y_val, y_test = get_splits()
+
+    # ============================================================
+    # 1. Train RF to get feature importance (`if GET_IMPORTANCES`)
+    # ============================================================
+    idx_top = (np.array([699, 674, 915, 577, 926, 1917, 378, 1057, 1004, 1257, 222, 694, 1453, 695, 1380, 314, 1928, 656, 650, 807]), None)[GET_IMPORTANCES]
+    k = 20
+
+    if GET_IMPORTANCES:
+        print("Training simple RF for importance selection...")
+        rf = train_simple_rf(X_train, y_train, seed=seed)
+        importances = rf.feature_importances_
+
+        # Select top-k bits by importance
+        idx_top = np.argsort(importances)[-k:]
+        print(f"Using top {k} fingerprint bits based on RF importance.")
+        print(f"Importance indices = {idx_top.tolist()}")
+
+        # Plot those features
+        plot_top_features(idx_top, importances,
+                          fname="pysr_top_rf_features.png")
+
+        # Save a mapping CSV: which bits were kept + RF importance
+        mapping_df = pd.DataFrame({
+            "fp_index": idx_top,
+            "rf_importance": importances[idx_top],
+        }).sort_values("rf_importance", ascending=False)
+        mapping_df.to_csv("pysr_feature_mapping.csv", index=False)
+        print("Saved feature mapping to pysr_feature_mapping.csv")
+
+    # Reduce datasets to these k bits
+    X_train_k = X_train[:, idx_top]
+    X_val_k = X_val[:, idx_top]
+    X_test_k = X_test[:, idx_top]
+
+    # Make nice feature names for PySR: fp_<original_bit_index>
+    feature_names = [f"fp_{j}" for j in idx_top]
+
+    # ============================================================
+    # 2. Subsample training data for PySR (expensive)
+    # ============================================================
+    n_train = X_train_k.shape[0]
+    n_sub = max(2000, int(0.05 * n_train))  # 5% or 2000
+    idx_sub = rng.choice(n_train, size=n_sub, replace=False)
+
+    X_train_sub = X_train_k[idx_sub]
+    y_train_sub = y_train[idx_sub]
+
+    print(f"Training PySR on {n_sub} samples and {k} features...")
+    print("Feature names passed to PySR:", feature_names)
+
+    # ============================================================
+    # 3. Build and fit PySR
+    # ============================================================
+    model = build_pysr_baseline(seed=seed, feature_names=feature_names)
+    model.fit(X_train_sub, y_train_sub, variable_names = feature_names)
+
+    # ============================================================
+    # 4. Evaluate
+    # ============================================================
+    print("\n=== PySR Results ===")
+    evaluate(model, X_train_sub, y_train_sub, "Train (subset)")
+    evaluate(model, X_val_k, y_val, "Validation")
+    evaluate(model, X_test_k, y_test, "Test")
+
+    # ============================================================
+    # 5. Inspect & save equations
+    # ============================================================
+    print("\n=== Best PySR Equation ===")
+    print(model)
+    print(sp.latex(model.sympy()))
+
+    # This CSV will contain columns like:
+    # ['complexity', 'loss', 'equation', 'sympy_format', ...]
+    eqs = model.equations_
+
+    eqs.to_csv("pysr_equations_topfeat.csv", index=False)
+    print("Saved equations to pysr_equations_topfeat.csv")
+    print("Variables in 'equation' column should use names like fp_147, fp_330, ...")
+
+
+if __name__ == "__main__":
+    main()

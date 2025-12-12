@@ -1,0 +1,50 @@
+# models_pysr.py
+from pysr import PySRRegressor
+from typing import Optional, List
+
+RANDOM_SEED = 42
+
+def build_pysr_baseline(
+    seed: int = RANDOM_SEED,
+    feature_names: Optional[List[str]] = None,
+    n_iterations = 100) -> PySRRegressor:
+    """
+    PySR model for interpretable symbolic regression.
+    Designed for a small set (e.g. 20–50) of pre-selected features.
+
+    Parameters
+    ----------
+    seed : int
+        Random seed for reproducibility.
+    feature_names : list of str, optional
+        Names of the input features (e.g. ['fp_147', 'fp_330', ...]).
+        If provided, PySR will use these instead of x0, x1, ...
+    """
+
+    model = PySRRegressor(
+        niterations=n_iterations,              # small-ish search budget for a baseline run
+        populations=20,
+        model_selection="best",       # pick the single best expression
+        elementwise_loss="loss(x, y) = (x - y)^2",
+        maxsize=30,                   # max expression complexity
+        binary_operators=["+", "-", "*", "/"],
+        unary_operators=[
+            "exp",
+            "sin",
+            "cos",
+            "tanh"
+        ],
+
+        extra_sympy_mappings=None,
+        random_state=RANDOM_SEED,
+        deterministic=True,
+        procs=0,
+        multithreading=False,
+        variable_names=feature_names,
+        temp_equation_file = True,
+        delete_tempfiles=True
+    )
+
+    return model
+
+
