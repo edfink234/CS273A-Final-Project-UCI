@@ -1,4 +1,10 @@
 # train_pysr.py
+import os
+import sys
+current_dir = os.path.dirname(__file__)
+misc_path = os.path.abspath(os.path.join(current_dir, "..", "misc"))
+sys.path.append(misc_path)
+
 import numpy as np
 from data_qm9 import get_splits
 from models_pysr import build_pysr_baseline
@@ -6,8 +12,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.pipeline import Pipeline
-from train_rf import train_simple_rf
-from plots import plot_top_features, parity_plots_from_expression
+from plots import plot_top_features, parity_plots_from_expression, plot_pysr_pareto_front
 import matplotlib.pyplot as plt
 import pandas as pd
 import sympy as sp
@@ -17,7 +22,8 @@ filterwarnings('ignore')
 RANDOM_SEED = 42
 GET_IMPORTANCES = False
 BASELINE = False
-MAKE_PARITY_PLOT = True
+MAKE_PARITY_PLOT = False
+MAKE_PARETO_PLOT = True
 
 def evaluate(model, X, y, name = ""):
     y_pred = model.predict(X)
@@ -86,6 +92,21 @@ def main():
             X_test_sr,  y_test,
             prefix="pysr_expr")
         return
+    
+    if MAKE_PARETO_PLOT:
+        plot_pysr_pareto_front(
+            csv_path="../../misc/pysr_equations_topfeat.csv",
+            idx_top=idx_top,
+            X_train=X_train_k,
+            y_train=y_train,
+            X_val=X_val_k,
+            y_val=y_val,
+            X_test=X_test_k,
+            y_test=y_test,
+            savefig="../../plots/pysr_pareto_front.png",
+        )
+        return
+
 
     # Make nice feature names for PySR: fp_<original_bit_index>
     feature_names = [f"fp_{j}" for j in idx_top]

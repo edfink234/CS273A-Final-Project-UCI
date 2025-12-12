@@ -3,13 +3,13 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 RANDOM_SEED = 42
-def load_fingerprint_data(path="../QM9_datasets/qm9_fp_U0.csv"):
+def load_fingerprint_data(path="../../QM9_datasets/qm9_fp_U0.csv"):
     df = pd.read_csv(path)
     y = df["U0"].values
     X = df.loc[:, df.columns.str.startswith("fp_")].values
     return X, y
 
-def get_splits(path="../QM9_datasets/qm9_fp_U0.csv", seed=RANDOM_SEED, test_size=0.1, val_size=0.1):
+def get_splits(path="../../QM9_datasets/qm9_fp_U0.csv", seed=RANDOM_SEED, test_size=0.1, val_size=0.1):
     X, y = load_fingerprint_data(path)
 
     # first split off test
